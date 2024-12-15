@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
         console.error('Error updating counts:', error);
 
         return NextResponse.json(
-            { error: 'Internal server error', details: error.message },
+            { error: 'Internal server error', details: error },
             { status: 500 }
         );
     }

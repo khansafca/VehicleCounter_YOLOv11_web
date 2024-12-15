@@ -48,7 +48,13 @@ export default function About() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
           {teamMembers.map((member, index) => (
             <div key={index} className="card text-center p-4 shadow-lg rounded-lg transition-transform transform hover:scale-95">
-              <img src={member.photo} alt={member.name} className="w-32 h-32 mx-auto rounded-full mb-4" />
+              <Image 
+                src={member.photo} 
+                alt={member.name} 
+                className="w-32 h-32 mx-auto rounded-full mb-4" 
+                width={128}  // You can adjust the width as needed
+                height={128} // You can adjust the height as needed
+              />
               <h2 className="text-xl font-semibold">{member.name}</h2>
               <p className="text-gray-600">{member.university}</p>
               <p className="text-gray-600">{member.role}</p>
@@ -57,10 +63,7 @@ export default function About() {
         </div>
 
         <p className="text-center mb-12 text-justify">
-          This Vehicle Counter Application is a collaborative project by students from various universities, combining their expertise in machine learning, cloud computing to designed to revolutionize traffic monitoring and management.
-          It utilizes Python, TensorFlow.js, and YOLOv11 for real-time vehicle detection and tracking, delivering precise counting data even in complex scenarios. The system features a user-friendly Next.js-based frontend, enabling seamless visualization of insights. 
-          The backend leverages shacdn, TypeScript, and MySQL for robust data management, and the application is deployed on Google Cloud to ensure scalability and efficiency. 
-          Our goal is to provide actionable traffic insights for smarter urban development.
+          This Vehicle Counter Application is a collaborative project by students from various universities, combining their expertise in machine learning, cloud computing to design a system that revolutionizes traffic monitoring and management. It utilizes Python, TensorFlow.js, and YOLOv11 for real-time vehicle detection and tracking, delivering precise counting data even in complex scenarios. The system features a user-friendly Next.js-based frontend, enabling seamless visualization of insights. The backend leverages shacdn, TypeScript, and MySQL for robust data management, and the application is deployed on Google Cloud to ensure scalability and efficiency. Our goal is to provide actionable traffic insights for smarter urban development.
         </p>
 
         <div className="flex justify-center space-x-4">

@@ -1,5 +1,5 @@
 import pool from '@/lib/db';
-import { NextResponse, NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 // Handle POST request for inserting data
 export async function POST(req: NextRequest) {
@@ -54,14 +54,14 @@ export async function POST(req: NextRequest) {
         console.error('Error updating counts:', error);
 
         return NextResponse.json(
-            { error: 'Internal server error', details: error.message },
+            { error: 'Internal server error', details: error },
             { status: 500 }
         );
     }
 }
 
 // Handle GET request for retrieving data
-export async function GET(req: NextRequest) {
+export async function GET() {
     try {
         const query = 'SELECT * FROM counts ORDER BY timestamp DESC LIMIT 10'; // Example query to get the latest 10 entries
         const [rows] = await pool.execute(query);
@@ -69,6 +69,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ data: rows }, { status: 200 });
     } catch (error) {
         console.error('Error retrieving data from /api/vehicle-stats:', error);
-        return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'Internal server error', details: error }, { status: 500 });
     }
 }
+
