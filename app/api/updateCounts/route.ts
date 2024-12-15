@@ -49,12 +49,23 @@ export async function POST(req: NextRequest) {
             { message: 'Counts updated successfully', data: body },
             { status: 201 }
         );
-    } catch (error) {
-        console.error('Error updating counts:', error);
-
-        return NextResponse.json(
-            { error: 'Internal server error', details: error },
-            { status: 500 }
-        );
-    }
+    } catch (error: unknown) {
+        // Ensure the error is an instance of Error before accessing the message property
+        if (error instanceof Error) {
+            console.error('Error updating counts:', error);
+    
+            return NextResponse.json(
+                { error: 'Internal server error', details: error.message },
+                { status: 500 }
+            );
+        } else {
+            // Fallback if error is not an instance of Error
+            console.error('An unknown error occurred:', error);
+    
+            return NextResponse.json(
+                { error: 'Internal server error', details: 'Unknown error' },
+                { status: 500 }
+            );
+        }
+    }    
 }

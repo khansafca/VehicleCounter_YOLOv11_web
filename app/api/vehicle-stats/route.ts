@@ -50,13 +50,24 @@ export async function POST(req: NextRequest) {
             { message: 'Counts updated successfully', data: body },
             { status: 201 }
         );
-    } catch (error) {
-        console.error('Error updating counts:', error);
-
-        return NextResponse.json(
-            { error: 'Internal server error', details: error },
-            { status: 500 }
-        );
+    } catch (error: unknown) {
+        // Check if the error is an instance of the Error class
+        if (error instanceof Error) {
+            console.error('Error updating counts:', error);
+    
+            return NextResponse.json(
+                { error: 'Internal server error', details: error.message },
+                { status: 500 }
+            );
+        } else {
+            // Handle case where the error is not an instance of Error
+            console.error('An unknown error occurred:', error);
+            
+            return NextResponse.json(
+                { error: 'Internal server error', details: 'Unknown error' },
+                { status: 500 }
+            );
+        }
     }
 }
 
@@ -67,9 +78,15 @@ export async function GET() {
         const [rows] = await pool.execute(query);
 
         return NextResponse.json({ data: rows }, { status: 200 });
-    } catch (error) {
-        console.error('Error retrieving data from /api/vehicle-stats:', error);
-        return NextResponse.json({ error: 'Internal server error', details: error }, { status: 500 });
+    // In the catch block, explicitly cast the error to an instance of the Error object
+    } catch (error: unknown) {
+        if (error instanceof Error) {
+            console.error('Error retrieving data from /api/vehicle-stats:', error);
+            return NextResponse.json({ error: 'Internal server error', details: error.message }, { status: 500 });
+        } else {
+            console.error('An unknown error occurred:', error);
+            return NextResponse.json({ error: 'Internal server error', details: 'Unknown error' }, { status: 500 });
+        }
     }
 }
 
