@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>YOLOv8 Object Detection On Browser: TensroflowJs</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"></script>
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"
+        integrity="sha384-mkQ3/7FUtcGyoppY6bz/PORYoGqOl7/aSUMn2ymDOJcapfS6PHqxhRTMh1RR0Q6+"
+        crossorigin="anonymous"></script>
+    <style>
+        body,
+        html {
+            height: 100%;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #header {
+            position: absolute;
+            z-index: 2;
+            top: 0px;
+            width: 100%;
+            text-align: center;
+        }
+
+        #main {
+            position: relative;
+            width: 640px;
+            height: 480px;
+        }
+
+        #webcam,
+        #outputCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        #outputCanvas {
+            z-index: 2;
+            /* Ensure canvas is on top of video */
+        }
+
+        button {
+            font-size: 20px;
+            background-color: #000;
+            color: #fff;
+            cursor: pointer;
+            position: absolute;
+            top: 95%;
+            left: 50%;
+            margin-top: -50px;
+            margin-left: -50px;
+            width: 150px;
+            height: 50px;
+        }
+
+        #nav-container {
+            display: flex;
+            align-items: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="header">
+        <h1>YOLO Vehicle Detection</h1>
+    </div>
+    <div id="main">
+        <video id="webcam" autoplay playsinline width="640" height="640"></video>
+        <canvas id="outputCanvas"></canvas>
+    </div>
+    <div id="nav-container">
+        <button id="runInference">Run Inference</button>
+        <a href="/">Back</a>
+    </div>
+    <script src="./js/tracking.js"></script>
+    <script src="./js/utils.js"></script>
+    <script>
+        // const socket = io("http://localhost:8000");
+
+        const tracker = new Tracker();
+        const classNames = {
+            0: "bus",
+            1: "car",
+            2: "motorbike",
+            3: "truck",
+        };
+
+        const TARGET_WIDTH = 640;
+        const TARGET_HEIGHT = 640;
+        const linePoint1 = [150, 270];
+        const linePoint2 = [410, 400];
+        const offset = 12;
+        const counter = { "car": 0, "truck": 0, "motorbike": 0, "bus": 0 };
+        const detectedId = [];
+
+        let model;
+
+        async function loadModel() {
+            tf.setBackend('webgl');
+            model = await tf.loadGraphModel('./yolov11-200epochs_web_model/model.json');
+
+        }
+
+        async function runModel(tensor) {
+            if (!model) await loadModel();
+            return model.predict(tensor);
+        }
+
+        async function processWebcamFrame() {
+            const video = document.getElementById('webcam');
+            const tensor = await webcamToTensor(video);
+            // Measure inference time
+            const startTime = performance.now();
+            const predictions = await runModel(tensor);
+            const endTime = performance.now();
+            const inferenceTime = endTime - startTime;
+            console.log(`Inference Time: ${inferenceTime.toFixed(2)} ms`);
+            const detections = processPredictions(predictions, classNames);
+            const trackedBbox = tracker.update(detections);
+            await drawBoundingBoxes(video, trackedBbox);
+
+        }
+
+        function extractSelectedPredictions(indices, boxes, labels, classNames) {
+            return indices.map(i => {
+                const box = boxes.slice([i, 0], [1, -1]).squeeze().arraySync();
+                const label = labels.slice([i], [1]).arraySync()[0];
+                return { box, label: classNames[label] };
+            });
+        }
+
+        async function webcamToTensor(videoElement) {
+            const canvas = document.createElement('canvas');
+            canvas.width = TARGET_WIDTH;
+            canvas.height = TARGET_HEIGHT;
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+            ctx.drawImage(videoElement, 0, 0, TARGET_WIDTH, TARGET_HEIGHT);
+            const imageData = ctx.getImageData(0, 0, TARGET_WIDTH, TARGET_HEIGHT);
+            const tensor = tf.browser.fromPixels(imageData);
+
+            return tf.cast(tensor, 'float32').div(tf.scalar(255)).expandDims(0);
+        }
+
+        function processPredictions(predictions, classNames) {
+            return tf.tidy(() => {
+                const transRes = predictions.transpose([0, 2, 1]);
+                const boxes = calculateBoundingBoxes(transRes);
+                const [scores, labels] = calculateScoresAndLabels(transRes, classNames);
+
+                const indices = tf.image.nonMaxSuppression(boxes, scores, predictions.shape[2], 0.45, 0.8).arraySync();
+                return extractSelectedPredictions(indices, boxes, labels, classNames);
+            });
+        }
+
+        function calculateBoundingBoxes(transRes) {
+            const [xCenter, yCenter, width, height] = [
+                transRes.slice([0, 0, 0], [-1, -1, 1]),
+                transRes.slice([0, 0, 1], [-1, -1, 1]),
+                transRes.slice([0, 0, 2], [-1, -1, 1]),
+                transRes.slice([0, 0, 3], [-1, -1, 1])
+            ];
+
+            const topLeftX = tf.sub(xCenter, tf.div(width, 2));
+            const topLeftY = tf.sub(yCenter, tf.div(height, 2));
+            return tf.concat([topLeftX, topLeftY, width, height], 2).squeeze();
+        }
+
+        function calculateScoresAndLabels(transRes, classNames) {
+            const rawScores = transRes.slice([0, 0, 4], [-1, -1, Object.keys(classNames).length]).squeeze(0);
+            return [rawScores.max(1), rawScores.argMax(1)];
+        }
+
+        async function drawBoundingBoxes(imageElement, detections) {
+
+            const canvas = document.getElementById('outputCanvas');
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
+            canvas.width = imageElement.width;
+            canvas.height = imageElement.height;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const resizeScale = Math.min(TARGET_WIDTH / canvas.width, TARGET_HEIGHT / canvas.height);
+            const dx = (TARGET_WIDTH - canvas.width * resizeScale) / 2;
+            const dy = (TARGET_HEIGHT - canvas.height * resizeScale) / 2;
+
+            // Draw the line
+            ctx.strokeStyle = 'blue';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(linePoint1[0], linePoint1[1]);
+            ctx.lineTo(linePoint2[0], linePoint2[1]);
+            ctx.stroke();
+
+            detections.forEach(([topLeftX, topLeftY, width, height, id, label]) => {
+                if (triggerLine([topLeftX, topLeftY, width, height])) {
+                    // Don't count same id.
+                    if (!detectedId.includes(id)) {
+                        detectedId.push(id);
+                        updateCounter(label, counter);
+                    }
+                    console.log(counter);
+                }
+                topLeftX = topLeftX / resizeScale - dx / resizeScale;
+                topLeftY = topLeftY / resizeScale - dy / resizeScale;
+                width /= resizeScale;
+                height /= resizeScale;
+
+                // console.log(topLeftX, topLeftY, width, height);
+
+                ctx.strokeStyle = 'red';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(topLeftX, topLeftY, width, height);
+                ctx.fillStyle = 'red';
+                ctx.font = '20px Arial';
+                ctx.fillText(`#${id} ${label}`, topLeftX, topLeftY - 7);
+            });
+            // socket.emit("counter", counter);
+        }
+
+        async function setupWebcam() {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                const video = document.getElementById('webcam');
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+            } else {
+                console.error('getUserMedia is not supported');
+            }
+        }
+
+        // Start webcam processing when the DOM content is loaded
+        document.querySelector('#runInference').addEventListener('click', async () => {
+            await loadModel();
+            await setupWebcam();
+            setInterval(processWebcamFrame, 100); // Process each frame every second
+        });
+
+
+    </script>
+</body>
+
+</html>
